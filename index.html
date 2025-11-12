@@ -3,57 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SmartEdu - Kuis Online</title>
+    <title>SmartEdu - Kuis Online (Supabase)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        body {
-            font-family: 'Inter', sans-serif;
-        }
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            overflow: auto;
-            background-color: rgba(0,0,0,0.5);
-            justify-content: center;
-            align-items: center;
-        }
-        .modal-content {
-            background-color: #fefefe;
-            margin: auto;
-            padding: 24px;
-            border: 1px solid #888;
-            width: 90%;
-            max-width: 600px;
-            border-radius: 12px;
-            animation: fadeIn 0.3s;
-        }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: scale(0.95); }
-            to { opacity: 1; transform: scale(1); }
-        }
-        .close-button {
-            color: #aaa;
-            float: right;
-            font-size: 28px;
-            font-weight: bold;
-            cursor: pointer;
-        }
+        body { font-family: 'Inter', sans-serif; }
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.5); justify-content: center; align-items: center; }
+        .modal-content { background-color: #fefefe; margin: auto; padding: 24px; border: 1px solid #888; width: 90%; max-width: 600px; border-radius: 12px; animation: fadeIn 0.3s; }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        .close-button { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
         [x-cloak] { display: none !important; }
-        .chart-bar {
-            transition: width 0.5s ease-in-out;
-        }
+        .chart-bar { transition: width 0.5s ease-in-out; }
+        .loader { border: 4px solid #f3f3f3; border-radius: 50%; border-top: 4px solid #3498db; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
 </head>
 <body class="bg-gray-100 text-gray-800">
 
-    <div id="app" x-data="smartEduApp()" class="flex flex-col min-h-screen">
+    <div id="app" x-data="smartEduApp()" x-init="initSupabase()" class="flex flex-col min-h-screen">
+        <div x-show="isLoading" class="fixed inset-0 bg-white bg-opacity-75 flex justify-center items-center z-50">
+            <div class="loader"></div>
+        </div>
+
         <!-- Header -->
         <header class="bg-white shadow-md">
             <div class="container mx-auto px-6 py-4 flex justify-between items-center">
@@ -62,9 +35,7 @@
                     <h1 class="text-2xl font-bold text-gray-700">SmartEdu</h1>
                 </div>
                 <div x-show="loggedInUser">
-                    <button @click="logout()" class="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-300">
-                        Logout
-                    </button>
+                    <button @click="logout()" class="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-300">Logout</button>
                 </div>
             </div>
         </header>
@@ -82,28 +53,21 @@
                     <div class="space-y-4">
                         <div>
                              <label for="role" class="block text-sm font-medium text-gray-600">Login sebagai</label>
-                            <select id="role" x-model="loginForm.role" @change="loginForm.username = ''" class="mt-1 block w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                            <select id="role" x-model="loginForm.role" @change="loginForm.email = ''" class="mt-1 block w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
                                 <option value="siswa">Siswa</option>
                                 <option value="guru">Guru</option>
                                 <option value="admin">Admin</option>
                             </select>
                         </div>
                          <div>
-                            <label for="username" class="block text-sm font-medium text-gray-600" x-text="loginForm.role === 'guru' ? 'Nama Guru' : 'Username'"></label>
-                            <input type="text" id="username" x-model="loginForm.username" x-show="loginForm.role !== 'guru'" class="mt-1 block w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="Masukkan username">
-                            <select id="teacher-username" x-model="loginForm.username" x-show="loginForm.role === 'guru'" class="mt-1 block w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
-                                <option value="" disabled>-- Pilih Guru --</option>
-                                <template x-for="guru in getTeachers()" :key="guru.id">
-                                    <option :value="guru.id" x-text="guru.name"></option>
-                                </template>
-                            </select>
+                            <label for="email" class="block text-sm font-medium text-gray-600">Email</label>
+                            <input type="email" id="email" x-model="loginForm.email" class="mt-1 block w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="Masukkan email">
                         </div>
                         <div>
                             <label for="password" class="block text-sm font-medium text-gray-600">Password</label>
                             <input type="password" id="password" x-model="loginForm.password" @keyup.enter="login()" class="mt-1 block w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="Masukkan password">
                         </div>
-                       
-                        <p x-show="loginError" class="text-red-500 text-sm" x-text="loginError"></p>
+                        <p x-show="formError" class="text-red-500 text-sm" x-text="formError"></p>
                         <button @click="login()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300 text-lg">Login</button>
                     </div>
                      <p class="text-center text-sm text-gray-600 mt-6" x-show="loginForm.role === 'siswa'">
@@ -114,13 +78,13 @@
             
             <!-- Registration Page -->
             <div id="register-page" x-show="!loggedInUser && page === 'register'" x-cloak>
-                <div class="max-w-md mx-auto bg-white p-8 rounded-xl shadow-lg">
+                 <div class="max-w-md mx-auto bg-white p-8 rounded-xl shadow-lg">
                     <h2 class="text-3xl font-bold text-center mb-6">Daftar Akun Siswa</h2>
                     <div class="space-y-4">
                         <input type="text" x-model="registerForm.name" placeholder="Nama Lengkap" class="w-full px-4 py-2 border rounded-lg">
-                        <input type="text" x-model="registerForm.id" placeholder="Username" class="w-full px-4 py-2 border rounded-lg">
+                        <input type="email" x-model="registerForm.email" placeholder="Email" class="w-full px-4 py-2 border rounded-lg">
                         <input type="password" x-model="registerForm.password" placeholder="Password" class="w-full px-4 py-2 border rounded-lg">
-                        <input type="text" x-model="registerForm.class" placeholder="Kelas (contoh: Kelas 10A)" class="w-full px-4 py-2 border rounded-lg">
+                        <input type="text" x-model="registerForm.classValue" placeholder="Kelas (contoh: Kelas 10A)" class="w-full px-4 py-2 border rounded-lg">
                         <p x-show="formError" class="text-red-500 text-sm" x-text="formError"></p>
                         <button @click="registerStudent()" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg">Daftar</button>
                     </div>
@@ -129,7 +93,7 @@
                     </p>
                 </div>
             </div>
-
+            
             <!-- Admin Dashboard -->
             <div id="admin-dashboard" x-show="loggedInUser && loggedInUser.role === 'admin'" x-cloak>
                  <h2 class="text-3xl font-bold mb-6">Dashboard Admin</h2>
@@ -147,7 +111,7 @@
                                     </thead>
                                     <tbody>
                                         <template x-for="guru in getTeachers()" :key="guru.id">
-                                            <tr class="border-b"><td class="px-4 py-2 font-medium" x-text="guru.name"></td><td class="px-4 py-2" x-text="guru.subject"></td><td class="px-4 py-2" x-text="guru.class"></td><td class="px-4 py-2"><button @click="openEditTeacherModal(guru.id)" class="text-cyan-600 hover:underline mr-2">Edit</button><button @click="deleteUser(guru.id)" class="text-red-600 hover:underline">Hapus</button></td></tr>
+                                            <tr class="border-b"><td class="px-4 py-2 font-medium" x-text="guru.name"></td><td class="px-4 py-2" x-text="guru.subject"></td><td class="px-4 py-2" x-text="guru.class"></td><td class="px-4 py-2"><button @click="openEditTeacherModal(guru)" class="text-cyan-600 hover:underline mr-2">Edit</button><button @click="deleteUser(guru.id)" class="text-red-600 hover:underline">Hapus</button></td></tr>
                                         </template>
                                     </tbody>
                                 </table>
@@ -224,9 +188,9 @@
                                 <div class="border p-4 rounded-lg flex justify-between items-center">
                                     <div>
                                         <h4 class="font-bold" x-text="quiz.title"></h4>
-                                        <p class="text-sm text-gray-500" x-text="quiz.questions.length + ' soal oleh ' + users[quiz.teacherId]?.name"></p>
+                                        <p class="text-sm text-gray-500" x-text="quiz.questions.length + ' soal oleh ' + getTeacherById(quiz.teacher_id)?.name"></p>
                                     </div>
-                                    <button @click="startQuiz(quiz.id)" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg">Kerjakan</button>
+                                    <button @click="startQuiz(quiz)" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg">Kerjakan</button>
                                 </div>
                             </template>
                              <div x-show="getQuizzesForStudent().length === 0" class="text-center text-gray-500 py-4">
@@ -267,7 +231,7 @@
                             <template x-for="(question, index) in quizResult?.quiz.questions" :key="index">
                                 <div class="border p-4 rounded-lg">
                                     <p class="font-semibold" x-text="'Soal: ' + question.q"></p>
-                                    <p class="text-sm" :class="quizResult.answers[index] === question.a ? 'text-green-600' : 'text-red-600'">Jawaban Anda: <span x-text="quizResult.answers[index] || '(Tidak dijawab)'"></span></p>
+                                    <p class="text-sm" :class="studentAnswers[index] === question.a ? 'text-green-600' : 'text-red-600'">Jawaban Anda: <span x-text="studentAnswers[index] || '(Tidak dijawab)'"></span></p>
                                     <p class="text-sm text-blue-600">Jawaban Benar: <span x-text="question.a"></span></p>
                                 </div>
                             </template>
@@ -290,6 +254,7 @@
                 <div class="bg-white p-6 rounded-xl shadow-lg">
                     <h3 class="text-xl font-bold mb-4">Manajemen Kuis</h3>
                     <div class="space-y-4 max-h-96 overflow-y-auto pr-2">
+                        <!-- Perbaikan Error: Tambahkan cek 'loggedInUser' di sini -->
                         <template x-for="quiz in loggedInUser ? getQuizzesByTeacher(loggedInUser.id) : []" :key="quiz.id">
                             <div class="border p-4 rounded-lg flex justify-between items-center">
                                 <div>
@@ -297,8 +262,8 @@
                                     <p class="text-sm text-gray-500" x-text="quiz.questions.length + ' soal'"></p>
                                 </div>
                                 <div class="flex items-center space-x-2">
-                                    <button @click="showLeaderboard(quiz.id)" class="text-sm bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-1 px-2 rounded">Peringkat</button>
-                                    <button @click="openEditQuizModal(quiz.id)" class="text-sm bg-cyan-500 hover:bg-cyan-600 text-white font-semibold py-1 px-2 rounded">Edit</button>
+                                    <button @click="showLeaderboard(quiz)" class="text-sm bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-1 px-2 rounded">Peringkat</button>
+                                    <button @click="openEditQuizModal(quiz)" class="text-sm bg-cyan-500 hover:bg-cyan-600 text-white font-semibold py-1 px-2 rounded">Edit</button>
                                     <button @click="deleteQuiz(quiz.id)" class="text-sm bg-red-500 hover:bg-red-600 text-white font-semibold py-1 px-2 rounded">Hapus</button>
                                 </div>
                             </div>
@@ -307,19 +272,25 @@
                 </div>
             </div>
 
-            <!-- MODALS -->
+            <!-- MODALS (Semua modal ada di sini) -->
+            <!-- Modal Editor Guru -->
             <div id="teacher-editor-modal" class="modal" :class="{'flex': teacherModalOpen}">
                  <div class="modal-content w-full max-w-lg" x-show="teacherModalOpen" x-transition>
                     <span @click="teacherModalOpen = false" class="close-button">&times;</span>
                     <h3 class="text-2xl font-bold mb-6" x-text="teacherForm.isEdit ? 'Edit Guru' : 'Tambah Guru Baru'"></h3>
                     <div class="space-y-4">
-                        <input type="text" x-model="teacherForm.name" placeholder="Nama Lengkap" class="w-full px-4 py-2 border rounded-lg"><input type="text" x-model="teacherForm.id" placeholder="Username (untuk login)" class="w-full px-4 py-2 border rounded-lg" :disabled="teacherForm.isEdit"><input type="text" x-model="teacherForm.password" placeholder="Password" class="w-full px-4 py-2 border rounded-lg"><input type="text" x-model="teacherForm.subject" placeholder="Mata Pelajaran" class="w-full px-4 py-2 border rounded-lg"><input type="text" x-model="teacherForm.class" placeholder="Kelas yang Diajar" class="w-full px-4 py-2 border rounded-lg">
+                        <input type="text" x-model="teacherForm.name" placeholder="Nama Lengkap" class="w-full px-4 py-2 border rounded-lg">
+                        <input type="email" x-model="teacherForm.email" placeholder="Email (untuk login)" class="w-full px-4 py-2 border rounded-lg" :disabled="teacherForm.isEdit">
+                        <input type="text" x-model="teacherForm.password" :placeholder="teacherForm.isEdit ? 'Password (biarkan kosong jika tidak diubah)' : 'Password'" class="w-full px-4 py-2 border rounded-lg">
+                        <input type="text" x-model="teacherForm.subject" placeholder="Mata Pelajaran" class="w-full px-4 py-2 border rounded-lg">
+                        <input type="text" x-model="teacherForm.class" placeholder="Kelas yang Diajar" class="w-full px-4 py-2 border rounded-lg">
                         <p x-show="formError" class="text-red-500 text-sm" x-text="formError"></p>
                         <button @click="saveTeacher()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg">Simpan</button>
                     </div>
                 </div>
             </div>
             
+            <!-- Modal Editor Kuis -->
             <div id="quiz-editor-modal" class="modal" :class="{'flex': quizModalOpen}">
                  <div class="modal-content w-full max-w-2xl" x-show="quizModalOpen" x-transition>
                     <span @click="quizModalOpen = false" class="close-button">&times;</span>
@@ -347,6 +318,7 @@
                 </div>
             </div>
             
+            <!-- Modal Leaderboard -->
             <div id="leaderboard-modal" class="modal" :class="{'flex': leaderboardModalOpen}">
                  <div class="modal-content w-full max-w-lg" x-show="leaderboardModalOpen" x-transition>
                     <span @click="leaderboardModalOpen = false" class="close-button">&times;</span>
@@ -372,158 +344,378 @@
         </main>
 
         <footer class="bg-white mt-auto">
-            <div class="container mx-auto px-6 py-4 text-center text-gray-500">&copy; 2025 SmartEdu. Hak Cipta Dilindungi.</div>
+            <div class="container mx-auto px-6 py-4 text-center text-gray-500">&copy; 2Data SmartEdu. Hak Cipta Dilindungi.</div>
         </footer>
     </div>
 
     <script>
-        function smartEduApp() {
-            return {
-                // DATA
-                page: 'login',
-                loggedInUser: null,
-                loginForm: { username: '', password: '', role: 'siswa' },
-                registerForm: { name: '', id: '', password: '', class: '' },
-                loginError: '', formError: '',
-                users: {
-                    'admin': { password: 'admin', role: 'admin', name: 'Admin Utama' },
-                    'guruindah': { password: 'guru123', role: 'guru', name: 'Ibu Indah', subject: 'Matematika', class: 'Kelas 10A' },
-                    'gurubudi': { password: 'guru123', role: 'guru', name: 'Bapak Budi', subject: 'Fisika', class: 'Kelas 10B' },
-                    'budisanjaya': { password: '123', role: 'siswa', name: 'Budi Sanjaya', class: 'Kelas 10A' },
-                    'anita': { password: '123', role: 'siswa', name: 'Anita Lestari', class: 'Kelas 10A' },
-                    'charlie': { password: '123', role: 'siswa', name: 'Charlie Darmawan', class: 'Kelas 10B' },
-                },
-                quizzes: [
-                    { id: 1, teacherId: 'guruindah', title: 'Kuis Aljabar Dasar', questions: [ { q: 'Berapakah hasil dari 2x + 5 = 15?', a: '5' }, {q: 'Sederhanakan ekspresi 3(x + 2)', a: '3x + 6'}] },
-                    { id: 2, teacherId: 'gurubudi', title: 'Kuis Hukum Newton', questions: [ { q: 'Apa bunyi Hukum Newton I?', a: 'Inersia' } ] },
-                ],
-                studentResults: [ 
-                    { resultId: 1, studentId: 'budisanjaya', quizId: 1, score: 50, answers: {0: '10'} },
-                    { resultId: 2, studentId: 'anita', quizId: 1, score: 100, answers: {0: '5', 1: '3x + 6'} },
-                    { resultId: 3, studentId: 'charlie', quizId: 2, score: 100, answers: {0: 'Inersia'} }
-                ],
-                
-                // UI STATE & FORMS
-                teacherModalOpen: false,
-                teacherForm: { id: '', name: '', password: '', subject: '', class: '', isEdit: false },
-                quizModalOpen: false,
-                quizForm: { id: null, title: '', questions: [] },
-                leaderboardModalOpen: false,
-                leaderboardData: { title: '', results: [] },
+    function smartEduApp() {
+        return {
+            // -- STATE --
+            supabase: null,
+            isLoading: true,
+            page: 'login', // login, register, studentDashboard, takeQuiz, quizResult
+            loggedInUser: null, // Berisi profil dari tabel 'users'
+            
+            // -- DATA STORE --
+            users: [], // Menyimpan data semua user (untuk admin)
+            quizzes: [], // Menyimpan semua kuis
+            studentResults: [], // Menyimpan semua hasil kuis
 
-                // STUDENT QUIZ STATE
-                currentQuiz: null,
-                currentQuestionIndex: 0,
-                studentAnswers: {},
-                quizResult: null,
+            // -- FORMS --
+            loginForm: { email: '', password: '', role: 'siswa' },
+            registerForm: { name: '', email: '', password: '', classValue: '' },
+            formError: '',
+            teacherModalOpen: false,
+            teacherForm: { id: '', email: '', name: '', password: '', subject: '', class: '', isEdit: false },
+            quizModalOpen: false,
+            quizForm: { id: null, title: '', questions: [] },
+            leaderboardModalOpen: false,
+            leaderboardData: { title: '', results: [] },
 
-                // METHODS
-                login() {
-                    if (!this.loginForm.username) { this.loginError = 'Username atau nama guru harus dipilih.'; return; }
-                    const user = this.users[this.loginForm.username.toLowerCase()];
-                    if (user && user.password === this.loginForm.password && user.role === this.loginForm.role) {
-                        this.loggedInUser = { id: this.loginForm.username.toLowerCase(), ...user };
-                        this.loginError = '';
-                        if(user.role === 'siswa') this.page = 'studentDashboard';
-                    } else { this.loginError = 'Nama, password, atau peran salah!'; }
-                },
-                logout() { this.loggedInUser = null; this.page = 'login'; this.loginForm = { username: '', password: '', role: 'siswa' }; },
-                
-                registerStudent() {
-                    if (!this.registerForm.name || !this.registerForm.id || !this.registerForm.password || !this.registerForm.class) { this.formError = 'Semua kolom harus diisi.'; return; }
-                    if (this.users[this.registerForm.id.toLowerCase()]) { this.formError = 'Username sudah digunakan.'; return; }
-                    this.users[this.registerForm.id.toLowerCase()] = { password: this.registerForm.password, name: this.registerForm.name, role: 'siswa', class: this.registerForm.class };
-                    alert('Pendaftaran berhasil! Silakan login.');
-                    this.page = 'login';
-                    this.registerForm = { name: '', id: '', password: '', class: '' };
-                    this.formError = '';
-                },
+            // -- STUDENT QUIZ STATE --
+            currentQuiz: null,
+            currentQuestionIndex: 0,
+            studentAnswers: {},
+            quizResult: null,
 
-                // USER MANAGEMENT
-                getTeachers() { return Object.entries(this.users).filter(([id, u]) => u.role === 'guru').map(([id, u]) => ({ id, ...u })); },
-                getStudents() { return Object.entries(this.users).filter(([id, u]) => u.role === 'siswa').map(([id, u]) => ({ id, ...u })); },
-                openNewTeacherModal() { this.teacherForm = { id: '', name: '', password: '', subject: '', class: '', isEdit: false }; this.formError = ''; this.teacherModalOpen = true; },
-                openEditTeacherModal(id) { const user = this.users[id]; this.teacherForm = { id, name: user.name, password: user.password, subject: user.subject, class: user.class, isEdit: true }; this.formError = ''; this.teacherModalOpen = true; },
-                saveTeacher() {
-                    if (!this.teacherForm.id || !this.teacherForm.name || !this.teacherForm.password || !this.teacherForm.subject || !this.teacherForm.class) { this.formError = 'Semua kolom harus diisi.'; return; }
-                    if (!this.teacherForm.isEdit && this.users[this.teacherForm.id.toLowerCase()]) { this.formError = 'Username sudah ada.'; return; }
-                    this.users[this.teacherForm.id.toLowerCase()] = { password: this.teacherForm.password, name: this.teacherForm.name, role: 'guru', subject: this.teacherForm.subject, class: this.teacherForm.class };
-                    this.teacherModalOpen = false;
-                },
-                deleteUser(id) { if (confirm(`Yakin ingin menghapus ${this.users[id].name}?`)) { delete this.users[id]; } },
+            // -- INIT --
+            initSupabase() {
+                // 2. GANTI DENGAN URL & ANON KEY SUPABASE ANDA
+                const supabaseUrl = 'https://dcruzzyzofxlcipwdarv.supabase.co';
+                const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRjcnV6enl6b2Z4bGNpcHdkYXJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA0ODA5MTcsImV4cCI6MjA3NjA1NjkxN30.hUwwglVuN1DXDKpW7iXhUdcEn7VyeeGYj28rXyI5IxI';
                 
-                // QUIZ MANAGEMENT (TEACHER)
-                getQuizzesByTeacher(teacherId) { return this.quizzes.filter(q => q.teacherId === teacherId); },
-                openNewQuizModal() { this.quizForm = { id: null, title: '', questions: [{q:'', a:''}] }; this.formError = ''; this.quizModalOpen = true; },
-                openEditQuizModal(id) { const quiz = this.quizzes.find(q => q.id === id); this.quizForm = JSON.parse(JSON.stringify(quiz)); this.formError = ''; this.quizModalOpen = true; },
-                addQuestion() { this.quizForm.questions.push({ q: '', a: '' }); },
-                removeQuestion(index) { this.quizForm.questions.splice(index, 1); },
-                saveQuiz() {
-                    if (!this.quizForm.title || this.quizForm.questions.length === 0) { this.formError = 'Judul dan minimal 1 soal harus diisi.'; return; }
-                    const quizData = JSON.parse(JSON.stringify(this.quizForm));
-                    if (quizData.id) { // Edit quiz
-                        const index = this.quizzes.findIndex(q => q.id === quizData.id);
-                        if(index !== -1) this.quizzes[index] = quizData;
-                    } else { // New quiz
-                        quizData.id = Date.now();
-                        quizData.teacherId = this.loggedInUser.id;
-                        this.quizzes.push(quizData);
+                // --- PERBAIKAN: Cek yang lebih baik ---
+                if (supabaseUrl === 'https://URL_PROYEK_ANDA.supabase.co' || supabaseKey === 'KUNCI_ANON_ANDA') {
+                    alert('Konfigurasi GAGAL! Harap ganti URL dan Kunci Supabase di file index.html!');
+                    this.isLoading = false;
+                } else {
+                    this.supabase = supabase.createClient(supabaseUrl, supabaseKey);
+                    this.listenToAuthState();
+                }
+            },
+
+            async listenToAuthState() {
+                // Cek sesi saat aplikasi dimuat
+                const { data: { session } } = await this.supabase.auth.getSession();
+                if (session) {
+                    await this.fetchUserProfile(session.user.id);
+                    if(this.loggedInUser) {
+                       await this.fetchAllDataForRole(this.loggedInUser.role);
+                       if(this.loggedInUser.role === 'siswa') this.page = 'studentDashboard';
                     }
-                    this.quizModalOpen = false;
-                },
-                deleteQuiz(id) { if (confirm('Yakin ingin menghapus kuis ini?')) { this.quizzes = this.quizzes.filter(q => q.id !== id); } },
-                showLeaderboard(quizId) {
-                    const quiz = this.quizzes.find(q => q.id === quizId);
-                    if (!quiz) return;
-                    const results = this.studentResults
-                        .filter(r => r.quizId === quizId)
-                        .map(result => ({ studentName: this.users[result.studentId]?.name || 'Siswa Dihapus', score: result.score }))
-                        .sort((a, b) => b.score - a.score);
-                    this.leaderboardData = { title: quiz.title, results: results };
-                    this.leaderboardModalOpen = true;
-                },
+                }
+                this.isLoading = false;
+
+                // Dengarkan perubahan login/logout
+                this.supabase.auth.onAuthStateChange(async (event, session) => {
+                    this.isLoading = true; // Tampilkan loading saat ada perubahan
+                    if (event === 'SIGNED_IN' && session) {
+                        await this.fetchUserProfile(session.user.id);
+                        if(this.loggedInUser) {
+                           await this.fetchAllDataForRole(this.loggedInUser.role);
+                           if(this.loggedInUser.role === 'siswa') this.page = 'studentDashboard';
+                        }
+                    } else if (event === 'SIGNED_OUT') {
+                        this.loggedInUser = null;
+                        this.page = 'login';
+                    }
+                    this.isLoading = false;
+                });
+            },
+
+            async fetchUserProfile(userId) {
+                const { data, error } = await this.supabase
+                    .from('users')
+                    .select('*')
+                    .eq('id', userId)
+                    .single();
+                if (data) this.loggedInUser = data;
+            },
+            
+            async fetchAllDataForRole(role) {
+                this.isLoading = true;
+                // Selalu ambil semua data agar relasi (nama guru, nama siswa) berfungsi
+                await this.fetchUsers(); 
+                await this.fetchQuizzes();
+                await this.fetchStudentResults();
+                this.isLoading = false;
+            },
+
+            // -- DATA FETCHING METHODS --
+            async fetchUsers() {
+                const { data, error } = await this.supabase.from('users').select('*');
+                if (data) this.users = data;
+                else console.error('Error fetchUsers:', error);
+            },
+            async fetchQuizzes() {
+                const { data, error } = await this.supabase.from('quizzes').select('*');
+                if (data) this.quizzes = data;
+                else console.error('Error fetchQuizzes:', error);
+            },
+            async fetchStudentResults() {
+                 const { data, error } = await this.supabase.from('student_results').select('*');
+                if (data) this.studentResults = data;
+                else console.error('Error fetchStudentResults:', error);
+            },
+
+            // -- AUTH METHODS --
+            async login() {
+                if (!this.supabase) { this.formError = "Supabase belum dikonfigurasi."; return; } // Guard
+                this.isLoading = true;
+                this.formError = '';
                 
-                // QUIZ TAKING (STUDENT)
-                getQuizzesForStudent() { if(!this.loggedInUser) return []; const teacher = this.getTeachers().find(t => t.class === this.loggedInUser?.class); return teacher ? this.getQuizzesByTeacher(teacher.id) : []; },
-                startQuiz(id) { this.currentQuiz = this.quizzes.find(q => q.id === id); this.currentQuestionIndex = 0; this.studentAnswers = {}; this.page = 'takeQuiz'; },
-                submitQuiz() {
-                    let correctAnswers = 0;
-                    this.currentQuiz.questions.forEach((q, index) => {
-                        if(this.studentAnswers[index]?.trim().toLowerCase() === q.a.trim().toLowerCase()) { correctAnswers++; }
-                    });
-                    const score = (correctAnswers / this.currentQuiz.questions.length) * 100;
-                    this.quizResult = { quiz: this.currentQuiz, answers: this.studentAnswers, score };
-                    this.studentResults.push({ resultId: Date.now(), studentId: this.loggedInUser.id, quizId: this.currentQuiz.id, score, answers: this.studentAnswers });
-                    this.page = 'quizResult';
-                },
+                const { data: userProfile, error: profileError } = await this.supabase
+                    .from('users').select('role').eq('email', this.loginForm.email).single();
 
-                // DASHBOARD HELPERS
-                getStudentProgress() {
-                    if (!this.loggedInUser) return { quizCount: 0, avgScore: 0 };
-                    const results = this.studentResults.filter(r => r.studentId === this.loggedInUser.id);
-                    const quizCount = results.length;
-                    const avgScore = quizCount > 0 ? results.reduce((sum, r) => sum + r.score, 0) / quizCount : 0;
-                    return { quizCount, avgScore };
-                },
-                getTeacherForStudent(studentClass) { return this.getTeachers().find(t => t.class === studentClass); },
-                getTopTeachersData() {
-                    const teachers = this.getTeachers();
-                    const teacherData = teachers.map(t => ({...t, quizCount: this.getQuizzesByTeacher(t.id).length }));
-                    const maxQuizzes = Math.max(...teacherData.map(t => t.quizCount), 0);
-                    return teacherData.map(t => ({...t, percentage: maxQuizzes > 0 ? (t.quizCount / maxQuizzes) * 100 : 0 })).sort((a,b) => b.quizCount - a.quizCount);
-                },
-                getTopStudentsData() {
-                    const students = this.getStudents();
-                    const studentData = students.map(s => {
-                        const results = this.studentResults.filter(r => r.studentId === s.id);
-                        const avgScore = results.length > 0 ? results.reduce((sum, r) => sum + r.score, 0) / results.length : 0;
-                        return { ...s, avgScore };
+                if (!userProfile || userProfile.role !== this.loginForm.role) {
+                    this.formError = "Email atau peran salah.";
+                    this.isLoading = false;
+                    return;
+                }
+
+                const { error } = await this.supabase.auth.signInWithPassword({
+                    email: this.loginForm.email,
+                    password: this.loginForm.password,
+                });
+
+                if (error) this.formError = error.message;
+                this.isLoading = false; // listener onAuthStateChange akan menangani sisanya
+            },
+
+            async registerStudent() {
+                if (!this.supabase) { this.formError = "Supabase belum dikonfigurasi."; return; } // Guard
+                this.isLoading = true;
+                this.formError = '';
+                const { name, email, password, classValue } = this.registerForm;
+
+                if (!name || !email || !password || !classValue) {
+                    this.formError = "Semua kolom harus diisi.";
+                    this.isLoading = false;
+                    return;
+                }
+
+                const { data: authData, error: authError } = await this.supabase.auth.signUp({ email, password });
+                if (authError) {
+                    this.formError = authError.message;
+                    this.isLoading = false;
+                    return;
+                }
+
+                if (authData.user) {
+                    const { error: profileError } = await this.supabase
+                        .from('users')
+                        .insert({ id: authData.user.id, email: email, name: name, role: 'siswa', class: classValue });
+                    
+                    if (profileError) {
+                        this.formError = "Gagal menyimpan profil: " + profileError.message;
+                    } else {
+                        alert("Pendaftaran berhasil! Silakan cek email Anda untuk verifikasi, lalu login.");
+                        this.page = 'login';
+                    }
+                }
+                this.isLoading = false;
+            },
+            
+            async logout() {
+                this.isLoading = true;
+                await this.supabase.auth.signOut();
+                this.loggedInUser = null;
+                this.page = 'login';
+                this.isLoading = false;
+            },
+            
+             // === ADMIN METHODS ===
+            getTeachers() { return this.users.filter(u => u.role === 'guru'); },
+            getStudents() { return this.users.filter(u => u.role === 'siswa'); },
+            
+            openNewTeacherModal() { this.teacherForm = { id: '', email: '', name: '', password: '', subject: '', class: '', isEdit: false }; this.formError = ''; this.teacherModalOpen = true; },
+            openEditTeacherModal(guru) { this.teacherForm = { ...guru, password: '', isEdit: true }; this.formError = ''; this.teacherModalOpen = true; },
+            
+            async saveTeacher() {
+                if (!this.supabase) { this.formError = "Supabase belum dikonfigurasi."; return; } // Guard
+                this.isLoading = true;
+                this.formError = '';
+                
+                if (this.teacherForm.isEdit) {
+                    // Edit Guru: Hanya update profil
+                    const { data, error } = await this.supabase
+                        .from('users')
+                        .update({ name: this.teacherForm.name, subject: this.teacherForm.subject, class: this.teacherForm.class })
+                        .eq('id', this.teacherForm.id);
+                    
+                    if(error) this.formError = error.message;
+                    else {
+                        this.teacherModalOpen = false;
+                        await this.fetchUsers();
+                    }
+                } else {
+                    // Tambah Guru Baru
+                    // 1. Buat akun login
+                    const { data: authData, error: authError } = await this.supabase.auth.signUp({
+                        email: this.teacherForm.email, password: this.teacherForm.password
                     });
-                    return studentData.sort((a,b) => b.avgScore - a.avgScore);
-                },
-            }
+                    if (authError) { this.formError = authError.message; this.isLoading = false; return; }
+
+                    // 2. Simpan profil
+                    if (authData.user) {
+                        const { error: profileError } = await this.supabase
+                            .from('users')
+                            .insert({
+                                id: authData.user.id,
+                                email: this.teacherForm.email,
+                                name: this.teacherForm.name,
+                                role: 'guru',
+                                subject: this.teacherForm.subject,
+                                class: this.teacherForm.class
+                            });
+                        if (profileError) { this.formError = profileError.message; }
+                        else {
+                            this.teacherModalOpen = false;
+                            await this.fetchUsers();
+                        }
+                    }
+                }
+                this.isLoading = false;
+            },
+
+            async deleteUser(id) { 
+                if (!this.supabase) { alert("Supabase belum dikonfigurasi."); return; } // Guard
+                if (confirm('Yakin ingin menghapus pengguna ini? Ini tidak bisa dibatalkan.')) {
+                    this.isLoading = true;
+                    // Ini hanya menghapus profil, tidak user login-nya
+                    // Menghapus user auth memerlukan hak admin server
+                    const { error } = await this.supabase.from('users').delete().eq('id', id);
+                    if (error) alert(error.message);
+                    else await this.fetchUsers();
+                    this.isLoading = false;
+                }
+            },
+
+            // === GURU METHODS ===
+            getQuizzesByTeacher(teacherId) { return this.quizzes.filter(q => q.teacher_id === teacherId); },
+            openNewQuizModal() { this.quizForm = { id: null, title: '', questions: [{q:'', a:''}] }; this.formError = ''; this.quizModalOpen = true; },
+            openEditQuizModal(quiz) { this.quizForm = JSON.parse(JSON.stringify(quiz)); this.formError = ''; this.quizModalOpen = true; },
+            addQuestion() { this.quizForm.questions.push({ q: '', a: '' }); },
+            removeQuestion(index) { this.quizForm.questions.splice(index, 1); },
+            
+            async saveQuiz() {
+                if (!this.quizForm.title || this.quizForm.questions.length === 0) { this.formError = 'Judul dan minimal 1 soal harus diisi.'; return; }
+                if (!this.supabase) { this.formError = "Supabase belum dikonfigurasi."; return; } // Guard
+                this.isLoading = true;
+                
+                const quizData = JSON.parse(JSON.stringify(this.quizForm));
+                delete quizData.isEdit; // Hapus properti internal
+                
+                if (quizData.id) { // Edit quiz
+                    const { data, error } = await this.supabase
+                        .from('quizzes')
+                        .update({ title: quizData.title, questions: quizData.questions })
+                        .eq('id', quizData.id);
+                    if (error) this.formError = error.message;
+                    
+                } else { // New quiz
+                    const { data, error } = await this.supabase
+                        .from('quizzes')
+                        .insert({
+                            title: quizData.title,
+                            questions: quizData.questions,
+                            teacher_id: this.loggedInUser.id
+                        })
+                        .select(); // Ambil data yg baru dibuat
+                        
+                    if (error) this.formError = error.message;
+                }
+                this.quizModalOpen = false;
+                await this.fetchQuizzes();
+                this.isLoading = false;
+            },
+            
+            async deleteQuiz(id) { 
+                if (!this.supabase) { alert("Supabase belum dikonfigurasi."); return; } // Guard
+                if (confirm('Yakin ingin menghapus kuis ini?')) {
+                    this.isLoading = true;
+                    const { error } = await this.supabase.from('quizzes').delete().eq('id', id);
+                    if (error) alert(error.message);
+                    else await this.fetchQuizzes();
+                    this.isLoading = false;
+                }
+            },
+            
+            showLeaderboard(quiz) {
+                const results = this.studentResults
+                    .filter(r => r.quiz_id === quiz.id)
+                    .map(result => ({ studentName: this.getTeacherById(result.student_id)?.name || 'Siswa Dihapus', score: result.score }))
+                    .sort((a, b) => b.score - a.score);
+                this.leaderboardData = { title: quiz.title, results: results };
+                this.leaderboardModalOpen = true;
+            },
+                
+            // === SISWA METHODS ===
+            getQuizzesForStudent() { 
+                if(!this.loggedInUser) return []; 
+                const teacher = this.getTeachers().find(t => t.class === this.loggedInUser.class); 
+                return teacher ? this.quizzes.filter(q => q.teacher_id === teacher.id) : []; 
+            },
+            startQuiz(quiz) { this.currentQuiz = quiz; this.currentQuestionIndex = 0; this.studentAnswers = {}; this.page = 'takeQuiz'; },
+            
+            async submitQuiz() {
+                if (!this.supabase) { alert("Supabase belum dikonfigurasi."); return; } // Guard
+                this.isLoading = true;
+                let correctAnswers = 0;
+                this.currentQuiz.questions.forEach((q, index) => {
+                    // Cek jawaban, pastikan membandingkan string yang sudah dirapikan
+                    if(this.studentAnswers[index]?.trim().toLowerCase() === q.a?.trim().toLowerCase()) { 
+                        correctAnswers++; 
+                    }
+                });
+                const score = (correctAnswers / this.currentQuiz.questions.length) * 100;
+                
+                this.quizResult = { quiz: this.currentQuiz, answers: this.studentAnswers, score };
+                
+                // Simpan ke Supabase
+                const { error } = await this.supabase
+                    .from('student_results')
+                    .insert({
+                        student_id: this.loggedInUser.id,
+                        quiz_id: this.currentQuiz.id,
+                        score: score,
+                        answers: this.studentAnswers // Simpan jawaban siswa
+                    });
+                if(error) alert(error.message);
+                
+                await this.fetchStudentResults(); // Ambil hasil terbaru
+                this.page = 'quizResult';
+                this.isLoading = false;
+            },
+            getStudentProgress() {
+                if (!this.loggedInUser) return { quizCount: 0, avgScore: 0 };
+                const results = this.studentResults.filter(r => r.student_id === this.loggedInUser.id);
+                const quizCount = results.length;
+                const avgScore = quizCount > 0 ? results.reduce((sum, r) => sum + r.score, 0) / quizCount : 0;
+                return { quizCount, avgScore };
+            },
+
+            // === HELPERS ===
+            getTeacherById(id) { return this.users.find(u => u.id === id); },
+            getTeacherForStudent(studentClass) { return this.getTeachers().find(t => t.class === studentClass); },
+            getTopTeachersData() {
+                const teachers = this.getTeachers();
+                const teacherData = teachers.map(t => ({...t, quizCount: this.quizzes.filter(q => q.teacher_id === t.id).length }));
+                const maxQuizzes = Math.max(...teacherData.map(t => t.quizCount), 0);
+                return teacherData.map(t => ({...t, percentage: maxQuizzes > 0 ? (t.quizCount / maxQuizzes) * 100 : 0 })).sort((a,b) => b.quizCount - a.quizCount);
+            },
+            getTopStudentsData() {
+                const students = this.getStudents();
+                const studentData = students.map(s => {
+                    const results = this.studentResults.filter(r => r.student_id === s.id);
+                    const avgScore = results.length > 0 ? results.reduce((sum, r) => sum + r.score, 0) / results.length : 0;
+                    return { ...s, avgScore };
+                });
+                return studentData.sort((a,b) => b.avgScore - a.avgScore);
+            },
         }
+    }
     </script>
-
 </body>
 </html>
